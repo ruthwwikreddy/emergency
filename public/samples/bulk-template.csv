@@ -1,0 +1,3 @@
+fullName,insuranceStatus,preferredHospitals,allergies,familyDoctorName,bloodType,currentMedication,emergencyContactNumber
+John Doe,Valid,"Fortis,Apollo","Peanuts","Dr. Rao",O+,"Metformin","+911234567890"
+Jane Smith,Expired,"KIMS","","",A-,"","+919876543210"

@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Emergency Card</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css" />
+  <style>
+    .critical {
+      color: red;
+    }
+    .hotlines {
+      background-color: red;
+      color: white;
+      padding: 10px;
+      border-radius: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1>Emergency Card</h1>
+    </header>
+
+    <section id="cardSection" class="card emergency-card">
+      <div class="card-header">
+        <div class="title">
+          <span class="cross">+</span>
+          <h2 id="name">Name</h2>
+        </div>
+        <div class="meta">
+          <span id="uid" class="badge">ID</span>
+          <span id="insurance" class="badge">Insurance</span>
+        </div>
+      </div>
+
+      <div class="info-grid">
+        <div class="info-item">
+          <h3>Blood Type</h3>
+          <p id="bloodType" class="bold critical"></p>
+        </div>
+        <div class="info-item">
+          <h3>Allergies</h3>
+          <p id="allergies" class="bold critical"></p>
+        </div>
+        <div class="info-item">
+          <h3>Current Medication</h3>
+          <p id="medication"></p>
+        </div>
+        <div class="info-item">
+          <h3>Preferred Hospitals</h3>
+          <p id="hospitals"></p>
+        </div>
+        <div class="info-item">
+          <h3>Family Doctor</h3>
+          <p id="doctor"></p>
+        </div>
+        <div class="info-item">
+          <h3>Emergency Contact</h3>
+          <p id="contact" class="bold critical"></p>
+        </div>
+      </div>
+
+      <div class="hotlines" id="hotlinesBox">
+        <p id="hotlineTitle">Detecting local emergency hotlines...</p>
+        <div id="hotlineList">
+          <p id="hotlineGeneral">General Emergency: 112</p>
+          <p id="hotlinePolice" style="display:none"></p>
+          <p id="hotlineAmbulance" style="display:none"></p>
+          <p id="hotlineFire" style="display:none"></p>
+          <p id="hotlineWomen" style="display:none"></p>
+          <p id="hotlineChild" style="display:none"></p>
+        </div>
+        <div class="actions" style="margin-top:10px;">
+          <button id="callHotline" class="btn primary">Call Local Emergency</button>
+        </div>
+        <p class="helper" id="locationNote" style="margin-top:8px;">We will ask for your location to route to the right numbers.</p>
+      </div>
+
+      <div class="actions">
+        <button id="alertNow" class="btn danger">Alert Now</button>
+        <button id="downloadPdf" class="btn">Download as PDF</button>
+        <button id="shareLink" class="btn primary">Share Link</button>
+      </div>
+
+      <div class="qr-wrap" style="margin-top:14px; text-align:center;">
+        <p class="helper" style="margin:6px 0;">Scan to open this card</p>
+        <div id="qrContainer" style="display:inline-block; padding:8px; background:#fff; border:1px solid var(--border); border-radius:8px;"></div>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <p>Keep this page bookmarked. It only works via direct link.</p>
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="/js/main.js"></script>
+</body>
+</html>
