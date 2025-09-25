@@ -20,7 +20,8 @@
     }
   </style>
 </head>
-<body>
+  <body>
+  <div class="toast-container" id="toastContainer"></div>
   <div class="container">
     <header class="header">
       <h1>Emergency Card</h1>
@@ -32,6 +33,28 @@
           <span class="cross">+</span>
           <h2 id="name">Name</h2>
         </div>
+
+  <!-- Passcode Modal for Card Access -->
+  <div id="passcodeModal" class="modal" style="display:none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Enter Vehicle Last 4</h3>
+        <button id="passcodeClose" class="modal-close" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="passcodeInput">Vehicle Number (last 4 digits)</label>
+          <input id="passcodeInput" type="text" inputmode="numeric" pattern="\d{4}" maxlength="4" placeholder="1234" />
+          <p class="helper">Enter the last four digits of the vehicle number to view this card.</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <div class="actions">
+          <button id="passcodeSubmit" class="btn primary">Unlock</button>
+        </div>
+      </div>
+    </div>
+  </div>
         <div class="meta">
           <span id="uid" class="badge">ID</span>
           <span id="insurance" class="badge">Insurance</span>
@@ -61,7 +84,7 @@
         </div>
         <div class="info-item">
           <h3>Emergency Contact</h3>
-          <p id="contact" class="bold critical"></p>
+          <a id="contact" class="bold critical" href="#" style="text-decoration: underline;"></a>
         </div>
       </div>
 
@@ -98,8 +121,83 @@
     </footer>
   </div>
 
+  <!-- Alert Modal -->
+  <div id="alertModal" class="modal" style="display:none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Send Emergency Alert</h3>
+        <button id="alertModalClose" class="modal-close" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="actions" style="margin-bottom:10px; justify-content:flex-end;">
+          <button id="moreOptionsToggle" class="btn" type="button">More options ▾</button>
+        </div>
+        <div id="advancedOptions" class="collapse">
+        <div class="modal-section">
+          <h4>Helper Details</h4>
+          <div class="grid">
+            <div class="form-group">
+              <label for="helperName">Your Name (optional)</label>
+              <input id="helperName" type="text" placeholder="e.g., A nearby helper" />
+            </div>
+            <div class="form-group">
+              <label for="helperPhone">Your Phone (optional)</label>
+              <input id="helperPhone" type="text" placeholder="e.g., +911234567890" />
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-section">
+          <h4>Recipients</h4>
+          <div class="form-group">
+            <label for="alertPrimaryContact">Primary Contact</label>
+            <input id="alertPrimaryContact" type="text" placeholder="e.g. +911234567890" />
+            <p class="helper">Ensure the number includes country code (e.g., +1, +91)</p>
+          </div>
+
+          <div class="form-group">
+            <label for="alertAdditionalContact">Additional Contacts (optional, comma-separated)</label>
+            <input id="alertAdditionalContact" type="text" placeholder="e.g., +911234567890, +14155550123" />
+          </div>
+        </div>
+
+        <div class="modal-section">
+          <h4>Message Options</h4>
+          <div class="options">
+            <label><input type="checkbox" id="optIncludeLocation" checked /> Include location (if available)</label>
+            <label><input type="checkbox" id="optIncludeMedical" checked /> Include medical info</label>
+            <label><input type="checkbox" id="optIncludeHotline" checked /> Include local hotline</label>
+            <label><input type="checkbox" id="optIncludeCard" checked /> Include card link</label>
+          </div>
+        </div>
+        </div>
+
+        <div class="form-group">
+          <label for="alertMessage">Message</label>
+          <textarea id="alertMessage" rows="6" placeholder="Your emergency message will appear here so you can edit before sending..."></textarea>
+          <div class="message-tools">
+            <span id="smsCounter" class="helper">0 chars</span>
+            <button id="resetMessage" class="btn" type="button" style="margin-left:auto;">Reset to default</button>
+          </div>
+          <p class="helper">You can edit this message before sending. It can include medical info, location (if available), and the local hotline.</p>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <div class="actions">
+          <button id="sendSms" class="btn primary">Send SMS</button>
+          <button id="sendWhatsApp" class="btn">Send WhatsApp</button>
+          <button id="sendEmail" class="btn">Send Email</button>
+          <button id="callPrimaryModal" class="btn">Call Primary</button>
+          <button id="callHotlineModal" class="btn">Call Hotline</button>
+          <button id="alertCloseFooter" class="btn" type="button">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="/js/main.js"></script>
-</body>
-</html>
+  </body>
+  </html>

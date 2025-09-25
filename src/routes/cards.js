@@ -17,6 +17,7 @@ router.post('/', async (req, res) => {
       bloodType,
       currentMedication = '',
       emergencyContactNumber,
+      vehicleLast4,
     } = req.body;
 
     // Normalize inputs (accept comma-separated strings or arrays)
@@ -25,6 +26,12 @@ router.post('/', async (req, res) => {
       if (typeof val === 'string') return val.split(',').map((v) => v.trim()).filter(Boolean);
       return [];
     };
+
+    // Validate vehicleLast4 (last 4 digits)
+    const last4 = String(vehicleLast4 || '').trim();
+    if (!/^\d{4}$/.test(last4)) {
+      return res.status(400).json({ message: 'vehicleLast4 must be exactly 4 digits' });
+    }
 
     const card = await Card.create({
       fullName,
@@ -35,6 +42,7 @@ router.post('/', async (req, res) => {
       bloodType,
       currentMedication: toArray(currentMedication),
       emergencyContactNumber,
+      vehicleLast4: last4,
     });
 
     return res.status(201).json(card);
@@ -133,8 +141,12 @@ router.post('/bulk-upload', upload.single('file'), async (req, res) => {
 // Get card by unique ID
 router.get('/:id', async (req, res) => {
   try {
-    const card = await Card.findOne({ uniqueId: req.params.id }).lean();
-    if (!card) return res.status(404).json({ message: 'Card not found' });
+    const v4 = String(req.query.v4 || '').trim();
+    if (!/^\d{4}$/.test(v4)) {
+      return res.status(400).json({ message: 'Missing or invalid passcode. Provide last 4 digits as v4 query parameter.' });
+    }
+    const card = await Card.findOne({ uniqueId: req.params.id, vehicleLast4: v4 }).lean();
+    if (!card) return res.status(404).json({ message: 'Card not found or passcode incorrect' });
     return res.json(card);
   } catch (err) {
     console.error('Fetch card error:', err);

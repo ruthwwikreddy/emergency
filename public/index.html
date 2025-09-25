@@ -70,6 +70,12 @@
           <input type="tel" id="emergencyContactNumber" name="emergencyContactNumber" placeholder="+91XXXXXXXXXX" required />
           <small class="helper">Include country code, e.g., +91.</small>
         </div>
+
+        <div class="form-group">
+          <label for="vehicleLast4">Vehicle Number (last 4 digits) <span class="req">*</span></label>
+          <input type="text" id="vehicleLast4" name="vehicleLast4" placeholder="1234" pattern="\d{4}" maxlength="4" required />
+          <small class="helper">Only the last four digits. This will act as a passcode for helpers after scanning.</small>
+        </div>
       </div>
 
       <button type="submit" class="btn primary">Generate Emergency Card</button>

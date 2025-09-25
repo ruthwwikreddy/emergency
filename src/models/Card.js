@@ -15,6 +15,7 @@ const CardSchema = new mongoose.Schema(
     bloodType: { type: String, required: true },
     currentMedication: { type: [String], default: [] },
     emergencyContactNumber: { type: String, required: true },
+    vehicleLast4: { type: String, required: true, match: /^\d{4}$/ },
   },
   { timestamps: true }
 );

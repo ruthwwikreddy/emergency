@@ -23,6 +23,11 @@
     }, 2000);
   };
 
+  // Track the currently detected hotline info and approximate location
+  let CURRENT_HOTLINE = { title: 'Emergency Hotlines', general: '100' };
+  let LAST_COORDS = null; // { latitude, longitude } or null
+  let LAST_APPROX = null; // string or null
+
   if (form) {
     const submitBtn = form.querySelector('button[type="submit"]');
     form.addEventListener('submit', async (e) => {
@@ -32,6 +37,15 @@
       // Basic phone validation with country code
       if (!/^\+?[0-9]{7,15}$/.test(data.emergencyContactNumber)) {
         showToast('Please enter a valid emergency contact number with country code');
+        const phoneInput = document.getElementById('emergencyContactNumber');
+        if (phoneInput) { phoneInput.focus(); phoneInput.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+        return;
+      }
+      // Vehicle last 4 validation
+      if (!/^\d{4}$/.test(String(data.vehicleLast4 || '').trim())) {
+        showToast('Please enter the last 4 digits of the vehicle number');
+        const v4Input = document.getElementById('vehicleLast4');
+        if (v4Input) { v4Input.focus(); v4Input.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
         return;
       }
 
@@ -143,9 +157,49 @@
       });
     };
 
+    // Passcode modal elements
+    const passModal = document.getElementById('passcodeModal');
+    const passInput = document.getElementById('passcodeInput');
+    const passSubmit = document.getElementById('passcodeSubmit');
+    const passClose = document.getElementById('passcodeClose');
+
+    const openPassModal = () => { if (passModal) { passModal.style.display = 'flex'; document.body.classList.add('modal-open'); setTimeout(() => passInput && passInput.focus(), 50); } };
+    const closePassModal = () => { if (passModal) { passModal.style.display = 'none'; document.body.classList.remove('modal-open'); } };
+
+    const getStoredV4 = () => sessionStorage.getItem('v4:' + id);
+    const storeV4 = (v4) => sessionStorage.setItem('v4:' + id, v4);
+    const clearV4 = () => sessionStorage.removeItem('v4:' + id);
+
+    const ensurePasscode = async () => {
+      let v4 = (getStoredV4() || '').trim();
+      if (!/^\d{4}$/.test(v4)) {
+        openPassModal();
+        await new Promise((resolve) => {
+          const handler = () => {
+            const val = (passInput && passInput.value.trim()) || '';
+            if (!/^\d{4}$/.test(val)) { showToast('Enter exactly 4 digits'); return; }
+            storeV4(val);
+            closePassModal();
+            passSubmit && passSubmit.removeEventListener('click', handler);
+            resolve();
+          };
+          passSubmit && passSubmit.addEventListener('click', handler);
+          passClose && passClose.addEventListener('click', () => { /* keep modal open to enforce entry */ });
+        });
+        v4 = getStoredV4() || '';
+      }
+      return v4;
+    };
+
     const fetchCard = async () => {
-      const res = await fetch(`/api/cards/${id}`);
+      const v4 = await ensurePasscode();
+      const res = await fetch(`/api/cards/${id}?v4=${encodeURIComponent(v4)}`);
       if (!res.ok) {
+        if (res.status === 400 || res.status === 404) {
+          clearV4();
+          showToast('Incorrect or missing passcode. Please try again.');
+          return null;
+        }
         showToast('Card not found');
         return null;
       }
@@ -167,7 +221,11 @@
       renderChips(medsEl, card.currentMedication, false);
       renderChips(hospEl, card.preferredHospitals, false);
       docEl.textContent = card.familyDoctorName || '—';
-      contactEl.textContent = card.emergencyContactNumber;
+      const tel = String(card.emergencyContactNumber || '').replace(/\s+/g,'');
+      contactEl.textContent = tel;
+      if (contactEl.tagName === 'A') {
+        contactEl.href = `tel:${tel}`;
+      }
       // Generate QR code
       const qrEl = document.getElementById('qrContainer');
       if (qrEl && window.QRCode) {
@@ -242,6 +300,7 @@
 
   function setHotlinesForCountry(countryCode) {
     const h = HOTLINES[countryCode] || HOTLINES.DEFAULT;
+    CURRENT_HOTLINE = h;
     if (!hotlineEl.box()) return;
     if (hotlineEl.title()) hotlineEl.title().textContent = h.title;
     if (hotlineEl.general()) hotlineEl.general().textContent = `General Emergency: ${h.general}`;
@@ -297,20 +356,41 @@
   }
 
   function composeAlertMessage(card, coords, address) {
-    const name = card.fullName || 'Emergency';
-    const blood = card.bloodType ? `\nBlood: ${card.bloodType}` : '';
-    const allergies = (card.allergies && card.allergies.length) ? `\nAllergies: ${card.allergies.join(', ')}` : '';
-    const meds = (card.currentMedication && card.currentMedication.length) ? `\nMeds: ${card.currentMedication.join(', ')}` : '';
-    const maps = coords ? `\nLocation: https://maps.google.com/?q=${coords.latitude},${coords.longitude}` : '';
-    const place = address ? `\nApprox: ${address}` : '';
-    return `ALERT: ${name} may need help.${blood}${allergies}${meds}${maps}${place}`;
+    const name = card.fullName || 'the person';
+    const latLon = coords ? `${Number(coords.latitude).toFixed(5)},${Number(coords.longitude).toFixed(5)}` : '';
+    const intro = `EMERGENCY ALERT: ${name} appears to be in DANGER.`;
+    const helper = `\nThis message was sent by a nearby helper who scanned the Emergency QR code and opened this website to notify you.`;
+
+    // Read option toggles if present (default true)
+    const includeLoc = document.getElementById('optIncludeLocation') ? document.getElementById('optIncludeLocation').checked : true;
+    const includeMedical = document.getElementById('optIncludeMedical') ? document.getElementById('optIncludeMedical').checked : true;
+    const includeHotline = document.getElementById('optIncludeHotline') ? document.getElementById('optIncludeHotline').checked : true;
+    const includeCard = document.getElementById('optIncludeCard') ? document.getElementById('optIncludeCard').checked : true;
+
+    // Optional helper identity
+    const helperName = (document.getElementById('helperName') && document.getElementById('helperName').value.trim()) || '';
+    const helperPhone = (document.getElementById('helperPhone') && document.getElementById('helperPhone').value.trim()) || '';
+    const helperLine = (helperName || helperPhone) ? `\nHelper: ${[helperName, helperPhone].filter(Boolean).join(' | ')}` : '';
+
+    const blood = includeMedical && card.bloodType ? `\nBlood: ${card.bloodType}` : '';
+    const allergies = includeMedical && (card.allergies && card.allergies.length) ? `\nAllergies: ${card.allergies.join(', ')}` : '';
+    const meds = includeMedical && (card.currentMedication && card.currentMedication.length) ? `\nMeds: ${card.currentMedication.join(', ')}` : '';
+    const coordsLine = includeLoc && coords ? `\nCoordinates: ${latLon}` : '';
+    const maps = includeLoc && coords ? `\nLocation: https://maps.google.com/?q=${coords.latitude},${coords.longitude}` : '';
+    const place = includeLoc && address ? `\nApprox: ${address}` : '';
+    const hotline = includeHotline && CURRENT_HOTLINE && CURRENT_HOTLINE.general ? `\nLocal Hotline: ${CURRENT_HOTLINE.general}` : '';
+    const cardUrl = includeCard && (typeof location !== 'undefined' && location.href) ? `\nCard: ${location.href}` : '';
+
+    return `${intro}${helper}${helperLine}${coordsLine}${maps}${place}${blood}${allergies}${meds}${hotline}${cardUrl}`;
   }
 
   function openSms(phone, message) {
     const body = encodeURIComponent(message);
     const num = phone.replace(/\s+/g,'');
-    // iOS vs Android differences - try generic first
-    const href = `sms:${encodeURIComponent(num)}?&body=${body}`;
+    // iOS vs Android differ in query parameter handling for SMS deep links
+    const isiOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    // iOS prefers: sms:number&body=... ; Android prefers: sms:number?body=...
+    const href = isiOS ? `sms:${encodeURIComponent(num)}&body=${body}` : `sms:${encodeURIComponent(num)}?body=${body}`;
     window.location.href = href;
   }
 
@@ -321,12 +401,215 @@
     window.open(href, '_blank');
   }
 
+  function openEmail(email, subject, message) {
+    const sub = encodeURIComponent(subject || 'Emergency Alert');
+    const body = encodeURIComponent(message || '');
+    const href = `mailto:${encodeURIComponent(email)}?subject=${sub}&body=${body}`;
+    window.location.href = href;
+  }
+
+  function setAlertHandler(alertBtn, card, coords, approx) {
+    if (!alertBtn || !card) return;
+    // Reuse modal if present; otherwise fallback to confirm flow
+    const modal = document.getElementById('alertModal');
+    const primaryInput = document.getElementById('alertPrimaryContact');
+    const additionalInput = document.getElementById('alertAdditionalContact');
+    const messageInput = document.getElementById('alertMessage');
+    const sendSmsBtn = document.getElementById('sendSms');
+    const sendWaBtn = document.getElementById('sendWhatsApp');
+    const sendEmailBtn = document.getElementById('sendEmail');
+    const callPrimaryBtn = document.getElementById('callPrimaryModal');
+    const callHotlineBtn = document.getElementById('callHotlineModal');
+    const optLoc = document.getElementById('optIncludeLocation');
+    const optMed = document.getElementById('optIncludeMedical');
+    const optHot = document.getElementById('optIncludeHotline');
+    const optCard = document.getElementById('optIncludeCard');
+    const smsCounter = document.getElementById('smsCounter');
+    const resetBtn = document.getElementById('resetMessage');
+    const closeBtn = document.getElementById('alertModalClose');
+    const footerCloseBtn = document.getElementById('alertCloseFooter');
+    const moreToggle = document.getElementById('moreOptionsToggle');
+    const advanced = document.getElementById('advancedOptions');
+    const helperNameEl = document.getElementById('helperName');
+    const helperPhoneEl = document.getElementById('helperPhone');
+
+    let escHandler = null;
+    const openModal = () => {
+      if (modal) modal.style.display = 'flex';
+      if (document && document.body) document.body.classList.add('modal-open');
+      // Default collapsed advanced options
+      if (advanced && !advanced.classList.contains('open')) advanced.classList.remove('open');
+      if (moreToggle) moreToggle.textContent = 'More options ▾';
+      // Autofocus message and move cursor to end
+      setTimeout(() => {
+        if (messageInput) {
+          const val = messageInput.value;
+          messageInput.focus();
+          messageInput.setSelectionRange(val.length, val.length);
+        }
+      }, 50);
+      // Load helper identity from localStorage
+      try {
+        const hn = localStorage.getItem('helperName');
+        const hp = localStorage.getItem('helperPhone');
+        if (helperNameEl && hn) helperNameEl.value = hn;
+        if (helperPhoneEl && hp) helperPhoneEl.value = hp;
+      } catch (_) {}
+      // ESC key to close
+      escHandler = (ev) => {
+        if (ev.key === 'Escape') closeModal();
+      };
+      document.addEventListener('keydown', escHandler);
+    };
+    const closeModal = () => {
+      if (modal) modal.style.display = 'none';
+      if (document && document.body) document.body.classList.remove('modal-open');
+      if (escHandler) {
+        document.removeEventListener('keydown', escHandler);
+        escHandler = null;
+      }
+    };
+
+    const updateMessage = () => {
+      const msg = composeAlertMessage(card, LAST_COORDS || coords, LAST_APPROX || approx);
+      if (messageInput) messageInput.value = msg;
+      updateCounter();
+    };
+
+    const updateCounter = () => {
+      if (!smsCounter || !messageInput) return;
+      const len = messageInput.value.length;
+      // Basic SMS segmentation estimate (GSM-7 assumed): 160 single, 153 concatenated
+      const segments = len <= 160 ? 1 : Math.ceil(len / 153);
+      smsCounter.textContent = `${len} chars · ~${segments} SMS segment${segments>1?'s':''}`;
+    };
+
+    if (alertBtn) {
+      alertBtn.onclick = () => {
+        // Prefill primary with card contact
+        if (primaryInput) primaryInput.value = (card.emergencyContactNumber || '').trim();
+        if (additionalInput) additionalInput.value = '';
+        updateMessage();
+        if (modal) openModal(); else {
+          // Fallback old flow
+          const contact = card.emergencyContactNumber || '';
+          if (!contact) { showToast('No emergency contact saved'); return; }
+          const msg = composeAlertMessage(card, coords, approx);
+          const choice = window.confirm('Send SMS to emergency contact? (Cancel to use WhatsApp)');
+          if (choice) openSms(contact, msg); else openWhatsApp(contact, msg);
+        }
+      };
+    }
+
+    // More options collapse toggle
+    if (moreToggle && advanced) {
+      // Start collapsed by default
+      advanced.classList.remove('open');
+      moreToggle.onclick = () => {
+        const willOpen = !advanced.classList.contains('open');
+        advanced.classList.toggle('open', willOpen);
+        moreToggle.textContent = willOpen ? 'Less options ▴' : 'More options ▾';
+      };
+    }
+
+    // Persist helper fields
+    if (helperNameEl) helperNameEl.addEventListener('input', () => {
+      try { localStorage.setItem('helperName', helperNameEl.value); } catch (_) {}
+      updateMessage();
+    });
+    if (helperPhoneEl) helperPhoneEl.addEventListener('input', () => {
+      try { localStorage.setItem('helperPhone', helperPhoneEl.value); } catch (_) {}
+      updateMessage();
+    });
+
+    if (closeBtn) closeBtn.onclick = closeModal;
+    if (footerCloseBtn) footerCloseBtn.onclick = closeModal;
+    if (modal) modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+
+    // Respond to toggle changes and message edits
+    [optLoc, optMed, optHot, optCard].forEach(el => el && el.addEventListener('change', updateMessage));
+    if (messageInput) messageInput.addEventListener('input', updateCounter);
+    if (resetBtn) resetBtn.addEventListener('click', updateMessage);
+
+    // Rate limiting to prevent accidental double sends
+    let lastSendAt = 0;
+    const canSend = () => {
+      const now = Date.now();
+      if (now - lastSendAt < 10000) { // 10s window
+        showToast('Please wait a few seconds before sending again.');
+        return false;
+      }
+      lastSendAt = now;
+      return true;
+    };
+
+    if (sendSmsBtn) {
+      sendSmsBtn.onclick = () => {
+        const p = (primaryInput && primaryInput.value || '').trim();
+        if (!/^\+?[0-9]{7,15}$/.test(p)) { showToast('Enter a valid primary number with country code'); primaryInput && primaryInput.focus(); primaryInput && primaryInput.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
+        const fallbackMsg = composeAlertMessage(card, LAST_COORDS || coords, LAST_APPROX || approx);
+        const msg = (messageInput && messageInput.value.trim()) || fallbackMsg;
+        if (!canSend()) return;
+        openSms(p, msg);
+        closeModal();
+      };
+    }
+
+    if (sendWaBtn) {
+      sendWaBtn.onclick = () => {
+        const p = (primaryInput && primaryInput.value || '').trim();
+        const a = (additionalInput && additionalInput.value || '').trim();
+        if (!/^\+?[0-9]{7,15}$/.test(p)) { showToast('Enter a valid primary number with country code'); primaryInput && primaryInput.focus(); primaryInput && primaryInput.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
+        const fallbackMsg = composeAlertMessage(card, LAST_COORDS || coords, LAST_APPROX || approx);
+        const msg = (messageInput && messageInput.value.trim()) || fallbackMsg;
+        if (!canSend()) return;
+        const list = [p].concat(a.split(',').map(s => s.trim()).filter(Boolean)).map(n => n.replace(/\s+/g,'')).filter((n, i, arr) => arr.indexOf(n) === i);
+        list.forEach((num, idx) => setTimeout(() => openWhatsApp(num, msg), 300 * idx));
+        closeModal();
+      };
+    }
+
+    if (sendEmailBtn) {
+      sendEmailBtn.onclick = () => {
+        const fallbackMsg = composeAlertMessage(card, LAST_COORDS || coords, LAST_APPROX || approx);
+        const msg = (messageInput && messageInput.value.trim()) || fallbackMsg;
+        const email = prompt('Enter email address to notify:');
+        if (!email) return;
+        if (!canSend()) return;
+        openEmail(email, 'Emergency Alert', msg);
+        closeModal();
+      };
+    }
+
+    if (callPrimaryBtn) {
+      callPrimaryBtn.onclick = () => {
+        const p = (primaryInput && primaryInput.value || '').trim();
+        if (!/^\+?[0-9]{7,15}$/.test(p)) { showToast('Enter a valid primary number with country code'); return; }
+        window.location.href = `tel:${p.replace(/\s+/g,'')}`;
+      };
+    }
+
+    if (callHotlineBtn) {
+      callHotlineBtn.onclick = () => {
+        const tel = (CURRENT_HOTLINE && CURRENT_HOTLINE.general) ? CURRENT_HOTLINE.general : '112';
+        window.location.href = `tel:${String(tel).replace(/\s+/g,'')}`;
+      };
+    }
+  }
+
   function initEmergencyFlow(card) {
     // Default while we detect - prioritize India
     setHotlinesForCountry('IN');
     if (hotlineEl.note()) hotlineEl.note().style.display = '';
 
     // Geolocate
+    const alertBtn = hotlineEl.alertBtn();
+    if (alertBtn) {
+      alertBtn.classList.add('pulse');
+      // Make the button functional immediately (prefilled modal)
+      setAlertHandler(alertBtn, card, null, null);
+    }
+
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(async (pos) => {
         const { latitude, longitude } = pos.coords || {};
@@ -340,41 +623,32 @@
           countryCode = getBrowserLocaleCountryFallback();
         }
         setHotlinesForCountry(countryCode || 'IN');
+        LAST_COORDS = { latitude, longitude };
+        LAST_APPROX = approx || null;
         if (hotlineEl.note()) hotlineEl.note().textContent = approx ? `Approximate location: ${approx}` : 'Location permission may improve routing.';
 
         // Wire Alert button now that we have possible coords
-        const alertBtn = hotlineEl.alertBtn();
-        if (alertBtn) {
-          alertBtn.classList.add('pulse');
-          alertBtn.onclick = () => {
-            const msg = composeAlertMessage(card, { latitude, longitude }, approx);
-            const contact = card.emergencyContactNumber || '';
-            if (!contact) { showToast('No emergency contact saved'); return; }
-            // Offer choices
-            const choice = window.confirm('Send SMS to emergency contact? (Cancel to use WhatsApp)');
-            if (choice) openSms(contact, msg); else openWhatsApp(contact, msg);
-          };
+        const updatedAlertBtn = hotlineEl.alertBtn();
+        if (updatedAlertBtn) {
+          setAlertHandler(updatedAlertBtn, card, { latitude, longitude }, approx);
         }
       }, (err) => {
         // Geolocation denied or failed
         const cc = getBrowserLocaleCountryFallback();
         setHotlinesForCountry(cc || 'IN');
+        LAST_COORDS = null;
+        LAST_APPROX = null;
         if (hotlineEl.note()) hotlineEl.note().textContent = 'Location access denied. Using default country hotlines.';
-        const alertBtn = hotlineEl.alertBtn();
-        if (alertBtn) {
-          alertBtn.classList.add('pulse');
-          alertBtn.onclick = () => {
-            const msg = composeAlertMessage(card, null, null);
-            const contact = card.emergencyContactNumber || '';
-            if (!contact) { showToast('No emergency contact saved'); return; }
-            const choice = window.confirm('Send SMS to emergency contact? (Cancel to use WhatsApp)');
-            if (choice) openSms(contact, msg); else openWhatsApp(contact, msg);
-          };
+        const fallbackAlertBtn = hotlineEl.alertBtn();
+        if (fallbackAlertBtn) {
+          setAlertHandler(fallbackAlertBtn, card, null, null);
         }
       }, { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 });
     } else {
       const cc = getBrowserLocaleCountryFallback();
       setHotlinesForCountry(cc || 'IN');
+      LAST_COORDS = null;
+      LAST_APPROX = null;
       if (hotlineEl.note()) hotlineEl.note().textContent = 'Geolocation not supported. Using default hotlines.';
     }
   }
