@@ -33,6 +33,7 @@
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const data = Object.fromEntries(new FormData(form).entries());
+      data.vehicleLast4 = (data.vehicleLast4 || '').trim();
 
       // Basic phone validation with country code
       if (!/^\+?[0-9]{7,15}$/.test(data.emergencyContactNumber)) {
